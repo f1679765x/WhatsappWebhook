@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed -i 's/from app\\\\./from listener_app./g' listener_app/main.py tests/test_db.py tests/test_media.py tests/test_parser.py tests/test_transcription.py)",
+      "Bash(sed -i 's/import app\\\\.transcription/import listener_app.transcription/g' tests/test_transcription.py)",
+      "Bash(sed -i 's/app\\\\.main:app/listener_app.main:app/g' start.bat start_service.bat)",
+      "Bash(/c/Users/Admin/miniconda3/envs/whatsappwebhook/python.exe -m pytest -q)",
+      "Bash(docker exec postgres psql -U n8n -d whatsapp -c \":*)",
+      "Bash(/c/Users/Admin/miniconda3/envs/whatsappwebhook/python.exe -m pip install anthropic asyncpg \"mcp>=1.0.0\" pytest-asyncio)"
+    ]
+  }
+}

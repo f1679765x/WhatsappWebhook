@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(conda run:*)",
+      "Bash(\"/c/Users/Admin/miniconda3/envs/whatsappwebhook/python.exe\":*)",
+      "Bash(docker exec:*)"
+    ]
+  }
+}

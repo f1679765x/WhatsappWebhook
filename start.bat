@@ -5,5 +5,5 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn listener_app.main:app --host 0.0.0.0 --port 8000
 pause

@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from app.db import delete_message, insert_message
+from listener_app.db import delete_message, insert_message
 
 
 def _make_row():
@@ -29,7 +29,7 @@ def _make_row():
     }
 
 
-@patch("app.db._connect")
+@patch("listener_app.db._connect")
 def test_insert_message_calls_execute(mock_connect):
     mock_conn = MagicMock()
     mock_cur = mock_conn.cursor.return_value.__enter__.return_value
@@ -41,7 +41,7 @@ def test_insert_message_calls_execute(mock_connect):
     mock_conn.commit.assert_called_once()
 
 
-@patch("app.db._connect")
+@patch("listener_app.db._connect")
 def test_insert_strips_download_url(mock_connect):
     mock_conn = MagicMock()
     mock_cur = mock_conn.cursor.return_value.__enter__.return_value
@@ -53,7 +53,7 @@ def test_insert_strips_download_url(mock_connect):
     assert "download_url" not in call_args
 
 
-@patch("app.db._connect")
+@patch("listener_app.db._connect")
 def test_delete_message_returns_file_path(mock_connect):
     mock_conn = MagicMock()
     mock_cur = mock_conn.cursor.return_value.__enter__.return_value
@@ -66,7 +66,7 @@ def test_delete_message_returns_file_path(mock_connect):
     assert mock_cur.execute.call_count == 2
 
 
-@patch("app.db._connect")
+@patch("listener_app.db._connect")
 def test_delete_message_not_found(mock_connect):
     mock_conn = MagicMock()
     mock_cur = mock_conn.cursor.return_value.__enter__.return_value

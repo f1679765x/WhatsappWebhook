@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
-import app.media as media_module
-from app.media import build_filename, delete_file, download_and_save
+import listener_app.media as media_module
+from listener_app.media import build_filename, delete_file, download_and_save
 
 
 def test_build_filename_audio():
@@ -24,7 +24,7 @@ def test_build_filename_strips_path_traversal():
     assert name.endswith("evil.pdf")
 
 
-@patch("app.media.httpx.Client")
+@patch("listener_app.media.httpx.Client")
 def test_download_and_save(mock_client_cls, tmp_path, monkeypatch):
     monkeypatch.setattr(media_module, "DATA_DIR", tmp_path)
 

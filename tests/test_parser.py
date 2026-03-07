@@ -1,4 +1,4 @@
-from app.parser import parse_deleted_id, parse_message
+from listener_app.parser import parse_deleted_id, parse_message
 
 
 def _payload(type_webhook, id_message, type_message, message_data, sender_data=None):
