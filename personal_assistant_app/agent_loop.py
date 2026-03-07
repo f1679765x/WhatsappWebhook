@@ -76,6 +76,34 @@ async def _run_db_query(sql: str, chat_id: str, pool) -> str:
         return f"Query error: {e}"
 
 
+READ_URL_TOOL = {
+    "name": "read_url",
+    "description": (
+        "Fetch and read the content of a URL. Use this when the user pastes a link and wants "
+        "you to read, summarise, or answer questions about its content."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "The URL to fetch"}
+        },
+        "required": ["url"],
+    },
+}
+
+
+async def _read_url(url: str) -> str:
+    jina_url = f"https://r.jina.ai/{url}"
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        resp = await client.get(jina_url, headers={"Accept": "text/plain"})
+        resp.raise_for_status()
+    text = resp.text.strip()
+    # Truncate to avoid overwhelming the context
+    if len(text) > 20000:
+        text = text[:20000] + "\n\n[content truncated]"
+    return text
+
+
 END_SESSION_TOOL = {
     "name": "end_session",
     "description": (
@@ -173,7 +201,7 @@ async def run_agent_loop(
     await sm.save_session(session_id, "thinking", history)
 
     client = anthropic.AsyncAnthropic()
-    tools = [END_SESSION_TOOL, SEARCH_TOOL, _make_db_query_tool(chat_id)] + mcp.get_tools()
+    tools = [END_SESSION_TOOL, READ_URL_TOOL, SEARCH_TOOL, _make_db_query_tool(chat_id)] + mcp.get_tools()
 
     for _ in range(MAX_ITERATIONS):
         try:
@@ -216,6 +244,14 @@ async def run_agent_loop(
                     external_send = (
                         tool_input.get("chatId") or tool_input.get("phone", "")
                     )
+
+                if tool_name == "read_url":
+                    try:
+                        result = await _read_url(tool_input.get("url", ""))
+                        tool_results.append({"type": "tool_result", "tool_use_id": block["id"], "content": result})
+                    except Exception as e:
+                        tool_results.append({"type": "tool_result", "tool_use_id": block["id"], "content": f"Error fetching URL: {e}", "is_error": True})
+                    continue
 
                 if tool_name == "end_session":
                     await sm.complete_session(session_id)
