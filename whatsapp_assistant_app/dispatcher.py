@@ -5,9 +5,9 @@ from pathlib import Path
 
 import asyncpg
 
-from personal_assistant_app.agent_loop import TRIGGERS, run_agent_loop
-from personal_assistant_app.mcp_client import MCPClientManager
-from personal_assistant_app.session_manager import SessionManager
+from whatsapp_assistant_app.agent_loop import TRIGGERS, run_agent_loop
+from whatsapp_assistant_app.mcp_client import MCPClientManager
+from whatsapp_assistant_app.session_manager import SessionManager
 
 log = logging.getLogger(__name__)
 

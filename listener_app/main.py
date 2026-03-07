@@ -14,8 +14,8 @@ from listener_app.db import delete_message, insert_message
 from listener_app.media import DATA_DIR, MEDIA_TYPES, build_filename, delete_file, download_and_save
 from listener_app.parser import parse_deleted_id, parse_message
 from listener_app.transcription import transcribe
-from personal_assistant_app.dispatcher import dispatch
-from personal_assistant_app.mcp_client import MCPClientManager
+from whatsapp_assistant_app.dispatcher import dispatch
+from whatsapp_assistant_app.mcp_client import MCPClientManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)

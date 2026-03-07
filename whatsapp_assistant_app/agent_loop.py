@@ -5,9 +5,9 @@ import os
 import anthropic
 import httpx
 
-from personal_assistant_app.mcp_client import MCPClientManager
-from personal_assistant_app.session_manager import SessionManager
-from personal_assistant_app.whatsapp import send_message
+from whatsapp_assistant_app.mcp_client import MCPClientManager
+from whatsapp_assistant_app.session_manager import SessionManager
+from whatsapp_assistant_app.whatsapp import send_message
 
 log = logging.getLogger(__name__)
 

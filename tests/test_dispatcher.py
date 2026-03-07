@@ -15,34 +15,34 @@ def _payload(tw, type_message, text, sender="65123@c.us", chat_id="65123@c.us"):
 
 @pytest.mark.asyncio
 async def test_ignores_outgoing():
-    from personal_assistant_app.dispatcher import dispatch
+    from whatsapp_assistant_app.dispatcher import dispatch
 
     mock_pool = MagicMock()
     mock_mcp = MagicMock()
-    with patch("personal_assistant_app.dispatcher.SessionManager") as mock_sm_cls:
+    with patch("whatsapp_assistant_app.dispatcher.SessionManager") as mock_sm_cls:
         await dispatch(_payload("outgoingMessageReceived", "textMessage", "@hardytoo help"), "outgoingMessageReceived", mock_pool, mock_mcp)
         mock_sm_cls.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_ignores_non_text_message():
-    from personal_assistant_app.dispatcher import dispatch
+    from whatsapp_assistant_app.dispatcher import dispatch
 
     payload = {
         "typeWebhook": "incomingMessageReceived",
         "senderData": {"chatId": "65123@c.us", "sender": "65123@c.us"},
         "messageData": {"typeMessage": "imageMessage"},
     }
-    with patch("personal_assistant_app.dispatcher.SessionManager") as mock_sm_cls:
+    with patch("whatsapp_assistant_app.dispatcher.SessionManager") as mock_sm_cls:
         await dispatch(payload, "incomingMessageReceived", MagicMock(), MagicMock())
         mock_sm_cls.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_no_trigger_no_watcher_does_nothing():
-    from personal_assistant_app.dispatcher import dispatch
+    from whatsapp_assistant_app.dispatcher import dispatch
 
-    with patch("personal_assistant_app.dispatcher.SessionManager") as mock_sm_cls:
+    with patch("whatsapp_assistant_app.dispatcher.SessionManager") as mock_sm_cls:
         mock_sm = AsyncMock()
         mock_sm_cls.return_value = mock_sm
         mock_sm.find_watcher.return_value = None
@@ -56,10 +56,10 @@ async def test_no_trigger_no_watcher_does_nothing():
 
 @pytest.mark.asyncio
 async def test_hardytoo_trigger_creates_session():
-    from personal_assistant_app.dispatcher import dispatch
+    from whatsapp_assistant_app.dispatcher import dispatch
 
-    with patch("personal_assistant_app.dispatcher.SessionManager") as mock_sm_cls, \
-         patch("personal_assistant_app.dispatcher.run_agent_loop") as mock_loop:
+    with patch("whatsapp_assistant_app.dispatcher.SessionManager") as mock_sm_cls, \
+         patch("whatsapp_assistant_app.dispatcher.run_agent_loop") as mock_loop:
         mock_sm = AsyncMock()
         mock_sm_cls.return_value = mock_sm
         mock_sm.find_watcher.return_value = None
@@ -79,10 +79,10 @@ async def test_hardytoo_trigger_creates_session():
 
 @pytest.mark.asyncio
 async def test_watcher_resumes_session():
-    from personal_assistant_app.dispatcher import dispatch
+    from whatsapp_assistant_app.dispatcher import dispatch
 
-    with patch("personal_assistant_app.dispatcher.SessionManager") as mock_sm_cls, \
-         patch("personal_assistant_app.dispatcher.run_agent_loop") as mock_loop:
+    with patch("whatsapp_assistant_app.dispatcher.SessionManager") as mock_sm_cls, \
+         patch("whatsapp_assistant_app.dispatcher.run_agent_loop") as mock_loop:
         mock_sm = AsyncMock()
         mock_sm_cls.return_value = mock_sm
         mock_sm.find_watcher.return_value = {

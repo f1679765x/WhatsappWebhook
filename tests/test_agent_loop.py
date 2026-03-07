@@ -24,7 +24,7 @@ def _mock_response(stop_reason, content_blocks):
 
 @pytest.mark.asyncio
 async def test_end_turn_sends_reply_and_completes():
-    from personal_assistant_app.agent_loop import run_agent_loop
+    from whatsapp_assistant_app.agent_loop import run_agent_loop
 
     mock_sm = AsyncMock()
     mock_mcp = MagicMock()
@@ -32,8 +32,8 @@ async def test_end_turn_sends_reply_and_completes():
 
     response = _mock_response("end_turn", [{"type": "text", "text": "Done!"}])
 
-    with patch("personal_assistant_app.agent_loop.anthropic.AsyncAnthropic") as mock_cls, \
-         patch("personal_assistant_app.agent_loop.send_message") as mock_send:
+    with patch("whatsapp_assistant_app.agent_loop.anthropic.AsyncAnthropic") as mock_cls, \
+         patch("whatsapp_assistant_app.agent_loop.send_message") as mock_send:
         mock_client = AsyncMock()
         mock_cls.return_value = mock_client
         mock_client.messages.create.return_value = response
@@ -46,7 +46,7 @@ async def test_end_turn_sends_reply_and_completes():
 
 @pytest.mark.asyncio
 async def test_tool_use_calls_mcp_and_continues():
-    from personal_assistant_app.agent_loop import run_agent_loop
+    from whatsapp_assistant_app.agent_loop import run_agent_loop
 
     mock_sm = AsyncMock()
     mock_mcp = AsyncMock()
@@ -59,8 +59,8 @@ async def test_tool_use_calls_mcp_and_continues():
     response_1 = _mock_response("tool_use", [tool_use_block])
     response_2 = _mock_response("end_turn", [text_block])
 
-    with patch("personal_assistant_app.agent_loop.anthropic.AsyncAnthropic") as mock_cls, \
-         patch("personal_assistant_app.agent_loop.send_message") as mock_send:
+    with patch("whatsapp_assistant_app.agent_loop.anthropic.AsyncAnthropic") as mock_cls, \
+         patch("whatsapp_assistant_app.agent_loop.send_message") as mock_send:
         mock_client = AsyncMock()
         mock_cls.return_value = mock_client
         mock_client.messages.create.side_effect = [response_1, response_2]
@@ -73,7 +73,7 @@ async def test_tool_use_calls_mcp_and_continues():
 
 @pytest.mark.asyncio
 async def test_external_wa_send_registers_watcher():
-    from personal_assistant_app.agent_loop import run_agent_loop
+    from whatsapp_assistant_app.agent_loop import run_agent_loop
 
     mock_sm = AsyncMock()
     mock_mcp = AsyncMock()
@@ -88,8 +88,8 @@ async def test_external_wa_send_registers_watcher():
     }
     response = _mock_response("tool_use", [tool_use_block])
 
-    with patch("personal_assistant_app.agent_loop.anthropic.AsyncAnthropic") as mock_cls, \
-         patch("personal_assistant_app.agent_loop.send_message"):
+    with patch("whatsapp_assistant_app.agent_loop.anthropic.AsyncAnthropic") as mock_cls, \
+         patch("whatsapp_assistant_app.agent_loop.send_message"):
         mock_client = AsyncMock()
         mock_cls.return_value = mock_client
         mock_client.messages.create.return_value = response
@@ -104,14 +104,14 @@ async def test_external_wa_send_registers_watcher():
 
 @pytest.mark.asyncio
 async def test_claude_api_error_fails_session():
-    from personal_assistant_app.agent_loop import run_agent_loop
+    from whatsapp_assistant_app.agent_loop import run_agent_loop
 
     mock_sm = AsyncMock()
     mock_mcp = MagicMock()
     mock_mcp.get_tools.return_value = []
 
-    with patch("personal_assistant_app.agent_loop.anthropic.AsyncAnthropic") as mock_cls, \
-         patch("personal_assistant_app.agent_loop.send_message") as mock_send:
+    with patch("whatsapp_assistant_app.agent_loop.anthropic.AsyncAnthropic") as mock_cls, \
+         patch("whatsapp_assistant_app.agent_loop.send_message") as mock_send:
         mock_client = AsyncMock()
         mock_cls.return_value = mock_client
         mock_client.messages.create.side_effect = Exception("API error")

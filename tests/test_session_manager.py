@@ -16,7 +16,7 @@ def _mock_pool(fetchrow_return=None, execute_return=None):
 
 @pytest.mark.asyncio
 async def test_create_session():
-    from personal_assistant_app.session_manager import SessionManager
+    from whatsapp_assistant_app.session_manager import SessionManager
 
     session_row = {
         "session_id": "abc",
@@ -39,7 +39,7 @@ async def test_create_session():
 
 @pytest.mark.asyncio
 async def test_save_session():
-    from personal_assistant_app.session_manager import SessionManager
+    from whatsapp_assistant_app.session_manager import SessionManager
 
     pool, conn = _mock_pool()
     sm = SessionManager(pool)
@@ -55,7 +55,7 @@ async def test_save_session():
 
 @pytest.mark.asyncio
 async def test_find_watcher_returns_none():
-    from personal_assistant_app.session_manager import SessionManager
+    from whatsapp_assistant_app.session_manager import SessionManager
 
     pool, conn = _mock_pool(fetchrow_return=None)
     sm = SessionManager(pool)
@@ -66,7 +66,7 @@ async def test_find_watcher_returns_none():
 
 @pytest.mark.asyncio
 async def test_register_and_delete_watcher():
-    from personal_assistant_app.session_manager import SessionManager
+    from whatsapp_assistant_app.session_manager import SessionManager
 
     pool, conn = _mock_pool()
     sm = SessionManager(pool)
