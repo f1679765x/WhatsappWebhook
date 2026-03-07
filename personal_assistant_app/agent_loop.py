@@ -1,7 +1,9 @@
+import asyncio
 import logging
 import os
 
 import anthropic
+import httpx
 
 from personal_assistant_app.mcp_client import MCPClientManager
 from personal_assistant_app.session_manager import SessionManager
@@ -11,6 +13,52 @@ log = logging.getLogger(__name__)
 
 MAX_ITERATIONS = int(os.environ.get("MAX_LOOP_ITERATIONS", 20))
 TRIGGERS = [t.strip() for t in os.environ.get("HARDYTOO_TRIGGER", "@hardytoo").split(",")]
+
+SEARCH_TOOL = {
+    "name": "web_search",
+    "description": "Search the web for current information, news, prices, or facts beyond your training data.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "The search query"}
+        },
+        "required": ["query"],
+    },
+}
+
+
+async def _search(query: str) -> str:
+    """Try Tavily first; fall back to DuckDuckGo if Tavily fails."""
+    api_key = os.environ.get("TAVILY_API_KEY", "")
+    if api_key:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(
+                    "https://api.tavily.com/search",
+                    json={"api_key": api_key, "query": query, "max_results": 5},
+                )
+                resp.raise_for_status()
+                results = resp.json().get("results", [])
+            if results:
+                log.info("web search via Tavily: %s", query)
+                return "\n\n".join(
+                    f"{r['title']}\n{r['url']}\n{r.get('content', '')}" for r in results
+                )
+        except Exception as e:
+            log.warning("Tavily failed (%s), falling back to DuckDuckGo", e)
+
+    # DuckDuckGo fallback
+    def _ddg(q: str) -> str:
+        from duckduckgo_search import DDGS
+        results = list(DDGS().text(q, max_results=5))
+        if not results:
+            return "No results found."
+        return "\n\n".join(
+            f"{r['title']}\n{r['href']}\n{r['body']}" for r in results
+        )
+
+    log.info("web search via DuckDuckGo: %s", query)
+    return await asyncio.to_thread(_ddg, query)
 
 SYSTEM_PROMPT = """You are Hardy's personal WhatsApp assistant.
 - Be respectful and professional at all times
@@ -40,7 +88,7 @@ async def run_agent_loop(
     await sm.save_session(session_id, "thinking", history)
 
     client = anthropic.AsyncAnthropic()
-    tools = mcp.get_tools()
+    tools = [SEARCH_TOOL] + mcp.get_tools()
 
     for _ in range(MAX_ITERATIONS):
         try:
@@ -48,7 +96,7 @@ async def run_agent_loop(
                 model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
                 max_tokens=4096,
                 system=SYSTEM_PROMPT,
-                tools=tools or anthropic.NOT_GIVEN,
+                tools=tools,
                 messages=history,
             )
         except Exception as e:
@@ -83,6 +131,18 @@ async def run_agent_loop(
                     external_send = (
                         tool_input.get("chatId") or tool_input.get("phone", "")
                     )
+
+                if tool_name == "web_search":
+                    try:
+                        result = await _search(tool_input.get("query", ""))
+                        tool_results.append({"type": "tool_result", "tool_use_id": block["id"], "content": result})
+                    except Exception as e:
+                        tool_results.append({"type": "tool_result", "tool_use_id": block["id"], "content": f"Search error: {e}", "is_error": True})
+                    continue
+
+                # MCP tools (namespaced with __)
+                if "__" not in tool_name:
+                    continue
 
                 try:
                     result = await mcp.call_tool(tool_name, tool_input)

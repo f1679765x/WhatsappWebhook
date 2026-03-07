@@ -64,8 +64,7 @@ async def _extract_quoted_content(payload: dict, db_pool: asyncpg.Pool) -> tuple
                 log.error("Could not read quoted image %s: %s", file_path, e)
 
     if quoted_type == "videoMessage":
-        caption = quoted.get("caption", "")
-        content = f"[Quoted video]{': ' + caption if caption else ''}\n{user_text}"
+        content = f"The user quoted a video file and said: \"{user_text}\". You cannot watch or analyse videos. Politely let them know you can't process video, and suggest they describe what they need help with instead."
         return user_text, content
 
     if quoted_type == "documentMessage":
@@ -125,7 +124,7 @@ async def _build_media_content(payload: dict, db_pool: asyncpg.Pool) -> tuple[st
         return caption, content
 
     if tm == "videoMessage":
-        content = f"[Video message]{': ' + caption if caption else ''}"
+        content = "The user sent a video file. You cannot watch or analyse videos. Politely let them know you can't process video, and suggest they describe what they need help with instead."
         return caption, content
 
     return caption, caption or f"[{tm}]"
