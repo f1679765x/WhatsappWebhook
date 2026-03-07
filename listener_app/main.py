@@ -114,13 +114,13 @@ async def _archive(payload: dict, tw: str):
         return
 
     if tm in MEDIA_TYPES_SET and row.get("download_url"):
-        fname = build_filename(
-            row["chat_id"], tm, row.get("file_name", "file"), row["timestamp"]
+        rel_path, bare_name = build_filename(
+            row["chat_id"], row.get("chat_name", ""), tm, row.get("file_name", "file"), row["timestamp"]
         )
         try:
-            rel_path = await asyncio.to_thread(download_and_save, row["download_url"], fname)
+            rel_path = await asyncio.to_thread(download_and_save, row["download_url"], rel_path)
             row["file_path"] = rel_path
-            row["file_name"] = fname
+            row["file_name"] = bare_name
             if tm == "audioMessage":
                 row["text_message"] = await asyncio.to_thread(
                     transcribe, str(DATA_DIR / rel_path)
