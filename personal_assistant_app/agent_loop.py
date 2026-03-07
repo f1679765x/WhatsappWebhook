@@ -14,6 +14,78 @@ log = logging.getLogger(__name__)
 MAX_ITERATIONS = int(os.environ.get("MAX_LOOP_ITERATIONS", 20))
 TRIGGERS = [t.strip() for t in os.environ.get("HARDYTOO_TRIGGER", "@hardytoo").split(",")]
 
+def _make_db_query_tool(chat_id: str) -> dict:
+    return {
+        "name": "db_query",
+        "description": (
+            "Run a read-only SQL SELECT query against the WhatsApp messages database. "
+            "Use this to retrieve conversation history, summarise activity, find messages, etc.\n\n"
+            "Table: messages\n"
+            "Columns:\n"
+            "  timestamp_sg  TIMESTAMP  — message time in Singapore time (use this for date filtering)\n"
+            "  chat_id       TEXT       — group or personal chat identifier\n"
+            "  chat_name     TEXT       — human-readable chat/group name\n"
+            "  sender_name   TEXT       — display name of the sender\n"
+            "  sender_number TEXT       — sender phone number\n"
+            "  type_webhook  TEXT       — incomingMessageReceived | outgoingMessageReceived | outgoingAPIMessageReceived\n"
+            "  type_message  TEXT       — textMessage | imageMessage | audioMessage | videoMessage | quotedMessage | documentMessage\n"
+            "  text_message  TEXT       — message body (or audio transcript for audioMessage)\n"
+            "  caption       TEXT       — caption for media messages\n"
+            "  file_name     TEXT       — filename for media\n\n"
+            "Rules:\n"
+            f"  - ALWAYS filter by chat_id = '{chat_id}' — queries must be scoped to the current chat only\n"
+            "  - Only SELECT queries allowed\n"
+            "  - Always include LIMIT (max 200)\n"
+            "  - Use timestamp_sg for date/time filtering, e.g. timestamp_sg >= NOW() - INTERVAL '2 days'\n"
+            "  - Outgoing bot messages have type_webhook = 'outgoingAPIMessageReceived'"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sql": {"type": "string", "description": "A read-only SELECT SQL query"}
+            },
+            "required": ["sql"],
+        },
+    }
+
+
+_BLOCKED_KEYWORDS = {"insert", "update", "delete", "drop", "alter", "create", "truncate", "grant", "revoke"}
+
+
+async def _run_db_query(sql: str, chat_id: str, pool) -> str:
+    normalized = sql.strip().lower()
+    if not normalized.startswith("select"):
+        return "Error: only SELECT queries are allowed."
+    for kw in _BLOCKED_KEYWORDS:
+        if f" {kw} " in f" {normalized} ":
+            return f"Error: keyword '{kw}' is not allowed."
+    if chat_id.lower() not in normalized:
+        return f"Error: query must be scoped to the current chat. Add WHERE chat_id = '{chat_id}' to your query."
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(sql)
+        if not rows:
+            return "No results found."
+        cols = list(rows[0].keys())
+        lines = [" | ".join(cols)]
+        lines.append("-" * len(lines[0]))
+        for row in rows:
+            lines.append(" | ".join(str(v) if v is not None else "" for v in row.values()))
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Query error: {e}"
+
+
+END_SESSION_TOOL = {
+    "name": "end_session",
+    "description": (
+        "Call this to explicitly close the conversation when the user's goal is fully met "
+        "or when the user indicates they are done (e.g. 'thanks', 'that's all', 'bye'). "
+        "After calling this, the bot will stop listening for follow-ups until triggered again."
+    ),
+    "input_schema": {"type": "object", "properties": {}, "required": []},
+}
+
 SEARCH_TOOL = {
     "name": "web_search",
     "description": "Search the web for current information, news, prices, or facts beyond your training data.",
@@ -71,7 +143,20 @@ SYSTEM_PROMPT = """You are Hardy's personal WhatsApp assistant.
   - No code blocks unless specifically asked for code
 - Default timezone: Asia/Singapore
 - Only perform actions available via the tools provided. Do not pretend to have capabilities not backed by a tool.
-- Do not hallucinate tool results — if a tool fails, report it honestly"""
+- Do not hallucinate tool results — if a tool fails, report it honestly
+- When the user's goal is fully met or they say they're done (e.g. "thanks", "that's all", "bye"), call end_session to close the conversation"""
+
+
+def _sanitize_block(block: dict) -> dict:
+    """Keep only fields the Anthropic API accepts in stored messages."""
+    t = block.get("type")
+    if t == "text":
+        return {"type": "text", "text": block["text"]}
+    if t == "tool_use":
+        return {"type": "tool_use", "id": block["id"], "name": block["name"], "input": block["input"]}
+    if t == "tool_result":
+        return {"type": "tool_result", "tool_use_id": block["tool_use_id"], "content": block.get("content", "")}
+    return {k: v for k, v in block.items() if v is not None}
 
 
 async def run_agent_loop(
@@ -88,7 +173,7 @@ async def run_agent_loop(
     await sm.save_session(session_id, "thinking", history)
 
     client = anthropic.AsyncAnthropic()
-    tools = [SEARCH_TOOL] + mcp.get_tools()
+    tools = [END_SESSION_TOOL, SEARCH_TOOL, _make_db_query_tool(chat_id)] + mcp.get_tools()
 
     for _ in range(MAX_ITERATIONS):
         try:
@@ -105,7 +190,7 @@ async def run_agent_loop(
             await send_message(chat_id, f"Sorry, I hit an error: {e}")
             return
 
-        assistant_content = [block.model_dump() for block in response.content]
+        assistant_content = [_sanitize_block(block.model_dump()) for block in response.content]
         history.append({"role": "assistant", "content": assistant_content})
 
         if response.stop_reason == "end_turn":
@@ -113,8 +198,8 @@ async def run_agent_loop(
                 b["text"] for b in assistant_content if b.get("type") == "text"
             )
             await send_message(chat_id, text)
-            await sm.save_session(session_id, "completed", history)
-            await sm.complete_session(session_id)
+            # Keep session as 'thinking' so user can follow up without re-triggering
+            await sm.save_session(session_id, "thinking", history)
             return
 
         if response.stop_reason == "tool_use":
@@ -132,12 +217,24 @@ async def run_agent_loop(
                         tool_input.get("chatId") or tool_input.get("phone", "")
                     )
 
+                if tool_name == "end_session":
+                    await sm.complete_session(session_id)
+                    log.info("session %s closed by bot", session_id)
+                    # Let the loop continue so Claude can send a farewell message
+                    tool_results.append({"type": "tool_result", "tool_use_id": block["id"], "content": "Session closed."})
+                    continue
+
                 if tool_name == "web_search":
                     try:
                         result = await _search(tool_input.get("query", ""))
                         tool_results.append({"type": "tool_result", "tool_use_id": block["id"], "content": result})
                     except Exception as e:
                         tool_results.append({"type": "tool_result", "tool_use_id": block["id"], "content": f"Search error: {e}", "is_error": True})
+                    continue
+
+                if tool_name == "db_query":
+                    result = await _run_db_query(tool_input.get("sql", ""), chat_id, sm.pool)
+                    tool_results.append({"type": "tool_result", "tool_use_id": block["id"], "content": result})
                     continue
 
                 # MCP tools (namespaced with __)

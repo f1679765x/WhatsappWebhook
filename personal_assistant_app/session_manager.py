@@ -3,6 +3,21 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+
+def _parse_history(value) -> list:
+    """Ensure conversation_history is always a proper Python list."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, list) else []
+        except Exception:
+            return []
+    return []
+
 import asyncpg
 
 log = logging.getLogger(__name__)
@@ -12,17 +27,17 @@ class SessionManager:
     def __init__(self, pool: asyncpg.Pool):
         self.pool = pool
 
-    async def create_session(self, chat_id: str, goal: str) -> dict:
+    async def create_session(self, chat_id: str, goal: str, sender_id: str = "") -> dict:
         session_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
         async with self.pool.acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO sessions
-                    (session_id, chat_id, status, goal, conversation_history, created_at, last_active_at)
-                VALUES ($1, $2, 'thinking', $3, '[]'::jsonb, $4, $4)
+                    (session_id, chat_id, status, goal, conversation_history, created_at, last_active_at, sender_id)
+                VALUES ($1, $2, 'thinking', $3, '[]'::jsonb, $4, $4, $5)
                 """,
-                session_id, chat_id, goal, now,
+                session_id, chat_id, goal, now, sender_id,
             )
         return await self.load_session(session_id)
 
@@ -31,7 +46,11 @@ class SessionManager:
             row = await conn.fetchrow(
                 "SELECT * FROM sessions WHERE session_id = $1", session_id
             )
-        return dict(row) if row else None
+        if not row:
+            return None
+        d = dict(row)
+        d["conversation_history"] = _parse_history(d.get("conversation_history"))
+        return d
 
     async def save_session(self, session_id: str, status: str, history: list):
         now = datetime.now(timezone.utc)
@@ -103,3 +122,23 @@ class SessionManager:
             await conn.execute(
                 "DELETE FROM session_watchers WHERE watcher_id = $1", watcher_id
             )
+
+    async def find_resumable_session(self, chat_id: str, sender_id: str, window_minutes: int = 15) -> dict | None:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT * FROM sessions
+                WHERE chat_id = $1
+                  AND sender_id = $2
+                  AND status = 'thinking'
+                  AND last_active_at >= NOW() - ($3 * INTERVAL '1 minute')
+                ORDER BY last_active_at DESC
+                LIMIT 1
+                """,
+                chat_id, sender_id, window_minutes,
+            )
+        if not row:
+            return None
+        d = dict(row)
+        d["conversation_history"] = _parse_history(d.get("conversation_history"))
+        return d

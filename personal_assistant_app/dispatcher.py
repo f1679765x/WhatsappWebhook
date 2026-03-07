@@ -157,9 +157,13 @@ async def dispatch(payload: dict, tw: str, db_pool: asyncpg.Pool, mcp: MCPClient
     else:
         trigger_text, content = await _build_media_content(payload, db_pool)
 
-    # Group chats require trigger in caption/text; personal chats always respond
     matched_trigger = next((t for t in TRIGGERS if t.lower() in trigger_text.lower()), None)
-    if is_group and not matched_trigger:
+
+    sm = SessionManager(db_pool)
+    resumable = await sm.find_resumable_session(chat_id, sender)
+
+    # Group chats: require trigger OR an ongoing conversation to continue
+    if is_group and not matched_trigger and not resumable:
         return
 
     # Strip the trigger so Claude doesn't see the phone number/name
@@ -168,9 +172,7 @@ async def dispatch(payload: dict, tw: str, db_pool: asyncpg.Pool, mcp: MCPClient
             content = content.replace(matched_trigger, "").strip()
         trigger_text = trigger_text.replace(matched_trigger, "").strip()
 
-    sm = SessionManager(db_pool)
-
-    # Resume a parked session if this sender is being watched
+    # Resume a parked session if this sender is being watched (external party reply)
     watcher = await sm.find_watcher(sender, chat_id)
     if watcher:
         session = await sm.load_session(str(watcher["session_id"]))
@@ -180,6 +182,13 @@ async def dispatch(payload: dict, tw: str, db_pool: asyncpg.Pool, mcp: MCPClient
             await run_agent_loop(session, f"[Reply from {sender}]: {trigger_text}", sm, mcp)
             return
 
+    # Continue an existing recent session if no trigger (user replying to bot)
+    if resumable and not matched_trigger:
+        log.info("continuing session %s in chat %s", resumable["session_id"], chat_id)
+        await run_agent_loop(resumable, content, sm, mcp)
+        return
+
+    # New session
     log.info("assistant triggered in chat %s (group=%s, type=%s)", chat_id, is_group, tm)
-    session = await sm.create_session(chat_id, trigger_text or tm)
+    session = await sm.create_session(chat_id, trigger_text or tm, sender_id=sender)
     await run_agent_loop(session, content, sm, mcp)
